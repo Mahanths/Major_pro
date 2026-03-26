@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero-Trust SDN Security Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- LOGIN PAGE -->
+        <div id="loginPage" class="login-container show">
+            <div class="login-card">
+                <div class="login-header">
+                    <i class="fas fa-shield-alt"></i>
+                    <h1>Zero-Trust Security</h1>
+                    <p>SDN Adaptive Network Protection</p>
+                </div>
+                <form id="loginForm" class="login-form">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="username" placeholder="Enter username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="password" placeholder="Enter password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select id="role" required>
+                            <option value="">-- Select Role --</option>
+                            <option value="admin">Admin</option>
+                            <option value="client">Client</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Login</button>
+                    <div class="demo-credentials">
+                        <p><strong>Demo Credentials:</strong></p>
+                        <p>Admin: admin / admin123</p>
+                        <p>Client: user1 / pass123</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ADMIN DASHBOARD -->
+        <div id="adminPage" class="dashboard admin-dashboard">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Zero-Trust</span>
+                </div>
+                <nav class="sidebar-nav">
+                    <a href="#" data-section="dashboard" class="nav-item active">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="#" data-section="threats" class="nav-item">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Threats</span>
+                    </a>
+                    <a href="#" data-section="network" class="nav-item">
+                        <i class="fas fa-network-wired"></i>
+                        <span>Network</span>
+                    </a>
+                    <a href="#" data-section="policies" class="nav-item">
+                        <i class="fas fa-gavel"></i>
+                        <span>Policies</span>
+                    </a>
+                    <a href="#" data-section="audit" class="nav-item">
+                        <i class="fas fa-history"></i>
+                        <span>Audit Log</span>
+                    </a>
+                    <a href="#" data-section="analytics" class="nav-item">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Analytics</span>
+                    </a>
+                    <a href="#" id="logoutBtn" class="nav-item logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </a>
+                </nav>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Header -->
+                <header class="admin-header">
+                    <div class="header-left">
+                        <h2 id="pageTitle">Dashboard</h2>
+                    </div>
+                    <div class="header-right">
+                        <div class="status-indicator">
+                            <span class="status-dot active"></span>
+                            <span id="systemStatus">System: Healthy</span>
+                        </div>
+                        <div class="user-profile">
+                            <img src="https://via.placeholder.com/40" alt="User">
+                            <span id="currentUser">Admin</span>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Dashboard Section -->
+                <section id="dashboardSection" class="content-section show">
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <h3>Active Threats</h3>
+                            </div>
+                            <div class="kpi-value" id="threatCount">12</div>
+                            <div class="kpi-trend negative">
+                                <i class="fas fa-arrow-up"></i> 8% increase
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <i class="fas fa-shield-alt"></i>
+                                <h3>Trust Score</h3>
+                            </div>
+                            <div class="kpi-value" id="avgTrust">94.2%</div>
+                            <div class="kpi-trend positive">
+                                <i class="fas fa-arrow-up"></i> 2% increase
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <i class="fas fa-users"></i>
+                                <h3>Connected Hosts</h3>
+                            </div>
+                            <div class="kpi-value" id="hostCount">45</div>
+                            <div class="kpi-trend neutral">
+                                <i class="fas fa-minus"></i> Stable
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <i class="fas fa-ban"></i>
+                                <h3>Blocked Flows</h3>
+                            </div>
+                            <div class="kpi-value" id="blockedCount">127</div>
+                            <div class="kpi-trend positive">
+                                <i class="fas fa-arrow-down"></i> 5% decrease
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="charts-container">
+                        <div class="chart-card">
+                            <h3>Threat Distribution (24h)</h3>
+                            <canvas id="threatChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Trust Score Trend</h3>
+                            <canvas id="trustChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Traffic Analysis -->
+                    <div class="traffic-card">
+                        <h3>Real-Time Traffic Analysis</h3>
+                        <div class="traffic-stats">
+                            <div class="stat">
+                                <label>Total Flows:</label>
+                                <span id="totalFlows">892</span>
+                            </div>
+                            <div class="stat">
+                                <label>Avg Throughput:</label>
+                                <span id="throughput">245 Mbps</span>
+                            </div>
+                            <div class="stat">
+                                <label>Packets/sec:</label>
+                                <span id="pps">12,450</span>
+                            </div>
+                            <div class="stat">
+                                <label>Anomalies Detected:</label>
+                                <span id="anomalies">3</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Threats Section -->
+                <section id="threatsSection" class="content-section">
+                    <div class="section-header">
+                        <h3>Active Threats</h3>
+                        <button class="btn btn-small" id="refreshThreats">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Source IP</th>
+                                <th>Dest IP</th>
+                                <th>Threat Type</th>
+                                <th>Severity</th>
+                                <th>Trust Score</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="threatsTable">
+                            <tr>
+                                <td>2026-03-26 19:35:22</td>
+                                <td>192.168.1.105</td>
+                                <td>8.8.8.8</td>
+                                <td>DDoS Attack</td>
+                                <td><span class="severity critical">CRITICAL</span></td>
+                                <td>0.12</td>
+                                <td><button class="btn btn-action btn-block">Block</button></td>
+                            </tr>
+                            <tr>
+                                <td>2026-03-26 19:34:15</td>
+                                <td>10.0.0.50</td>
+                                <td>192.168.1.1</td>
+                                <td>Port Scan</td>
+                                <td><span class="severity high">HIGH</span></td>
+                                <td>0.35</td>
+                                <td><button class="btn btn-action btn-limit">Limit</button></td>
+                            </tr>
+                            <tr>
+                                <td>2026-03-26 19:33:45</td>
+                                <td>172.16.0.88</td>
+                                <td>10.10.10.50</td>
+                                <td>Brute Force</td>
+                                <td><span class="severity medium">MEDIUM</span></td>
+                                <td>0.45</td>
+                                <td><button class="btn btn-action btn-verify">Verify</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Network Section -->
+                <section id="networkSection" class="content-section">
+                    <div class="section-header">
+                        <h3>Network Topology</h3>
+                    </div>
+                    <div class="network-panel">
+                        <div class="network-stats">
+                            <div class="stat-box">
+                                <span class="stat-label">Active Switches</span>
+                                <span class="stat-value">8</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-label">Active Links</span>
+                                <span class="stat-value">24</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-label">Network Health</span>
+                                <span class="stat-value">98%</span>
+                            </div>
+                        </div>
+                        <div class="network-devices">
+                            <h4>Connected Devices</h4>
+                            <div class="device-list">
+                                <div class="device-item">
+                                    <i class="fas fa-server"></i>
+                                    <span>Switch-001</span>
+                                    <span class="device-status online">Online</span>
+                                </div>
+                                <div class="device-item">
+                                    <i class="fas fa-server"></i>
+                                    <span>Switch-002</span>
+                                    <span class="device-status online">Online</span>
+                                </div>
+                                <div class="device-item">
+                                    <i class="fas fa-desktop"></i>
+                                    <span>Host-047</span>
+                                    <span class="device-status online">Online</span>
+                                </div>
+                                <div class="device-item">
+                                    <i class="fas fa-desktop"></i>
+                                    <span>Host-048</span>
+                                    <span class="device-status offline">Offline</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Policies Section -->
+                <section id="policiesSection" class="content-section">
+                    <div class="section-header">
+                        <h3>Zero-Trust Policies</h3>
+                        <button class="btn btn-primary" id="addPolicyBtn">
+                            <i class="fas fa-plus"></i> Add Policy
+                        </button>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Policy Name</th>
+                                <th>Type</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Flows Matched</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Block-DDoS-Sources</td>
+                                <td>Security</td>
+                                <td>1 (High)</td>
+                                <td><span class="badge active">Active</span></td>
+                                <td>245</td>
+                                <td>
+                                    <button class="btn btn-small btn-edit">Edit</button>
+                                    <button class="btn btn-small btn-delete">Delete</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Allow-Internal-DNS</td>
+                                <td>Access</td>
+                                <td>2</td>
+                                <td><span class="badge active">Active</span></td>
+                                <td>1,892</td>
+                                <td>
+                                    <button class="btn btn-small btn-edit">Edit</button>
+                                    <button class="btn btn-small btn-delete">Delete</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Audit Log Section -->
+                <section id="auditSection" class="content-section">
+                    <div class="section-header">
+                        <h3>Audit Log</h3>
+                        <input type="date" id="auditFilter" class="filter-input">
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event</th>
+                                <th>User</th>
+                                <th>Source</th>
+                                <th>Status</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTable">
+                            <tr>
+                                <td>2026-03-26 19:35:50</td>
+                                <td>Threat Blocked</td>
+                                <td>System</td>
+                                <td>192.168.1.105</td>
+                                <td><span class="badge success">Success</span></td>
+                                <td>DDoS Attack from external source</td>
+                            </tr>
+                            <tr>
+                                <td>2026-03-26 19:34:22</td>
+                                <td>Policy Applied</td>
+                                <td>admin@system</td>
+                                <td>Internal</td>
+                                <td><span class="badge success">Success</span></td>
+                                <td>Applied Block-DDoS-Sources policy</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Analytics Section -->
+                <section id="analyticsSection" class="content-section">
+                    <div class="section-header">
+                        <h3>Analytics & Insights</h3>
+                    </div>
+                    <div class="analytics-grid">
+                        <div class="chart-card">
+                            <h3>Attack Vectors</h3>
+                            <canvas id="attackVectorsChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Top Threats by Count</h3>
+                            <canvas id="topThreatsChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- CLIENT DASHBOARD -->
+        <div id="clientPage" class="dashboard client-dashboard">
+            <!-- Navbar -->
+            <nav class="client-navbar">
+                <div class="navbar-brand">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Zero-Trust Security</span>
+                </div>
+                <div class="navbar-menu">
+                    <a href="#" class="nav-link active" data-section="client-dashboard">My Connections</a>
+                    <a href="#" class="nav-link" data-section="client-trust">Trust Reports</a>
+                    <a href="#" class="nav-link" data-section="client-history">History</a>
+                    <button id="clientLogout" class="btn btn-small">Logout</button>
+                </div>
+            </nav>
+
+            <!-- Client Content -->
+            <main class="client-main">
+                <!-- My Connections -->
+                <section id="clientDashboardSection" class="client-section show">
+                    <div class="section-title">
+                        <h2>My Active Connections</h2>
+                        <p id="clientName">Welcome, User 1!</p>
+                    </div>
+
+                    <!-- Personal Status Cards -->
+                    <div class="client-cards">
+                        <div class="client-status-card">
+                            <h3>My Trust Score</h3>
+                            <div class="large-metric">
+                                <span class="value">92.5%</span>
+                                <span class="label">Excellent</span>
+                            </div>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: 92.5%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="client-status-card">
+                            <h3>Connection Status</h3>
+                            <div class="status-indicator-large">
+                                <span class="dot online"></span>
+                                <span class="text">Connected</span>
+                            </div>
+                            <p class="secondary-info">Last verified 2 min ago</p>
+                        </div>
+
+                        <div class="client-status-card">
+                            <h3>Network Access</h3>
+                            <div class="access-badge">
+                                <i class="fas fa-check-circle"></i>
+                                Full Access
+                            </div>
+                            <p class="secondary-info">No restrictions applied</p>
+                        </div>
+                    </div>
+
+                    <!-- Current Flows -->
+                    <div class="client-section-card">
+                        <h3>Active Network Flows</h3>
+                        <table class="client-table">
+                            <thead>
+                                <tr>
+                                    <th>Destination</th>
+                                    <th>Protocol</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Data Sent</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>192.168.1.1:443 (DNS)</td>
+                                    <td>DoH</td>
+                                    <td><span class="badge success">Allowed</span></td>
+                                    <td>5m 23s</td>
+                                    <td>2.4 MB</td>
+                                </tr>
+                                <tr>
+                                    <td>10.0.0.100:3306 (Database)</td>
+                                    <td>Encrypted</td>
+                                    <td><span class="badge success">Allowed</span></td>
+                                    <td>12m 15s</td>
+                                    <td>15.7 MB</td>
+                                </tr>
+                                <tr>
+                                    <td>8.8.8.8:53 (Google)</td>
+                                    <td>UDP</td>
+                                    <td><span class="badge success">Allowed</span></td>
+                                    <td>3m 45s</td>
+                                    <td>0.8 MB</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Trust Reports -->
+                <section id="clientTrustSection" class="client-section">
+                    <div class="section-title">
+                        <h2>Your Trust Reports</h2>
+                    </div>
+
+                    <div class="report-card">
+                        <h3>Weekly Trust Summary</h3>
+                        <canvas id="clientTrustChart"></canvas>
+                        <div class="report-details">
+                            <p><strong>Average Trust Score:</strong> 91.8%</p>
+                            <p><strong>Best Day:</strong> Monday (95.2%)</p>
+                            <p><strong>Risky Actions:</strong> 0</p>
+                            <p><strong>Policy Violations:</strong> 0</p>
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <h3>Connection Quality</h3>
+                        <div class="quality-metrics">
+                            <div class="metric">
+                                <span class="label">Average Latency</span>
+                                <span class="value">24ms</span>
+                            </div>
+                            <div class="metric">
+                                <span class="label">Packet Loss</span>
+                                <span class="value">0.02%</span>
+                            </div>
+                            <div class="metric">
+                                <span class="label">Jitter</span>
+                                <span class="value">2ms</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- History -->
+                <section id="clientHistorySection" class="client-section">
+                    <div class="section-title">
+                        <h2>Connection History</h2>
+                    </div>
+
+                    <table class="client-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Action</th>
+                                <th>Destination</th>
+                                <th>Result</th>
+                                <th>Trust Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>2026-03-26 19:35:12</td>
+                                <td>Connection Request</td>
+                                <td>10.0.0.100</td>
+                                <td><span class="badge success">Allowed</span></td>
+                                <td>94.2%</td>
+                            </tr>
+                            <tr>
+                                <td>2026-03-26 19:30:45</td>
+                                <td>DNS Query</td>
+                                <td>8.8.8.8</td>
+                                <td><span class="badge success">Allowed</span></td>
+                                <td>96.1%</td>
+                            </tr>
+                            <tr>
+                                <td>2026-03-26 19:25:30</td>
+                                <td>VPN Connection</td>
+                                <td>192.168.1.1</td>
+                                <td><span class="badge warning">Verified</span></td>
+                                <td>89.5%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+# ==========================================
+# HARDWARE REQUIREMENTS
+# ==========================================
+# Option A: 2-Laptop Mininet Setup (Recommended for Dev/Testing)
+# - 2 Laptops:
+#   - Laptop 1: "The Brain"
+#   - Laptop 2: "The Environment"
+# - Network Connectivity Method (1 of the following):
+#   - Virtual LAN (Tailscale/ZeroTier) OR
+#   - Direct Ethernet Cable OR
+#   - Windows Mobile Hotspot OR
+#   - Smartphone Wi-Fi Hotspot
+#
+# Option B: 3-Laptop Hybrid Physical VM Setup (Official Production Architecture)
+# - 3 Powerful Laptops (Windows or Mac):
+#   - Laptop 1: "The AI Brain" (Connected via Wi-Fi) 
+#   - Laptop 2: "The Bridge / Victim" (Connected via Wi-Fi + 1 Physical Ethernet Port)
+#   - Laptop 3: "The Attacker" (Wi-Fi OFF + 1 Physical Ethernet Port)
+# - 1 Standard Ethernet Cable (Connecting Laptop 2 to Laptop 3)
+# - Home Wi-Fi Router (Connecting Laptop 1 and Laptop 2 management interfaces)
+# - Required Software on all 3 Laptops:
+#   - Type-2 Hypervisor: VirtualBox or VMware Workstation Player (Free)
+#   - Ubuntu 22.04 LTS .iso file (Each laptop runs 1 VM)
+#   - Network adapters in VirtualBox MUST be set to "Bridged Mode" over the physical Ethernet cards.
+#
+# ==========================================
+# SOFTWARE & ENVIRONMENT REQUIREMENTS
+# ==========================================
+# OS Environment:
+# - Linux environment required (WSL 2 running Ubuntu 22.04 LTS or Ubuntu VM via VirtualBox/VMware)
+#
+# Core Frameworks & Tools:
+# - Java Environment: JDK 11+ (to compile/run ONOS controller)
+# - Python Environment: Python 3.8+
+# - ONOS Controller (Java)
+# - Mininet (Network emulator)
+# - Open vSwitch / openvswitch-switch
+#
+# Traffic Generation & Capture Tools:
+# - D-ITG (Distributed Internet Traffic Generator)
+# - Nmap
+# - TShark or Zeek
+#
+# ==========================================
+# PYTHON PIP DEPENDENCIES
+# ==========================================
+fastapi
+uvicorn
+scikit-learn
+xgboost
+pandas
+numpy
+scapy
