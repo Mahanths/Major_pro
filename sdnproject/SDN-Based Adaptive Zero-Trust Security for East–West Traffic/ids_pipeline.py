@@ -55,6 +55,9 @@ MAX_DEPTH = 20
 N_JOBS = -1  # Use all available cores
 VERBOSE = 1
 
+# Auto-detect settings (set to False for pre-processed feature-only datasets)
+AUTO_DETECT_FILTERS = True  # Auto-detect if IP/label filtering is needed
+
 # ============================================================================
 # COLOR CODES FOR OUTPUT
 # ============================================================================
@@ -193,7 +196,7 @@ def clean_data(df):
     """
     Clean the dataset by:
     - Stripping whitespace from column names
-    - Removing NaN values
+    - Removing rows with NaN in critical columns (label + numeric features)
     - Removing infinite values
     
     Parameters:
@@ -217,9 +220,28 @@ def clean_data(df):
     print("✓")
     print_info(f"Columns: {df.columns.tolist()}")
     
-    # Display missing values before cleaning
-    print("\n   Before cleaning:")
-    nan_counts = df.isna().sum()
+    # Identify numeric columns only
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    print(f"   • Found {len(numeric_cols)} numeric columns")
+    
+    # Find label column (case-insensitive)
+    label_col = None
+    for col in df.columns:
+        if col.lower() in ['label', 'attack', 'attack_type', 'class']:
+            label_col = col
+            break
+    
+    if label_col is None:
+        print_warning("No label column found. Skipping critical column NaN check...")
+        cols_to_check = numeric_cols[:10]  # Check first 10 numeric columns
+    else:
+        print(f"   • Found label column: {Colors.BOLD}{label_col}{Colors.END}")
+        # Check label + first few numeric columns for NaN
+        cols_to_check = [label_col] + numeric_cols[:5]
+    
+    # Display missing values in critical columns only
+    print(f"\n   Before cleaning (checking {len(cols_to_check)} critical columns):")
+    nan_counts = df[cols_to_check].isna().sum()
     nan_cols = nan_counts[nan_counts > 0]
     if len(nan_cols) > 0:
         print(f"      NaN values by column:")
@@ -227,26 +249,27 @@ def clean_data(df):
             pct = (count / len(df)) * 100
             print(f"         • {col}: {count:,} ({pct:.2f}%)")
     else:
-        print("      • No NaN values found")
+        print("      • No NaN values found in critical columns")
     
-    # Remove NaN values
-    print("\n   Removing NaN values...", end=" ", flush=True)
-    df_clean = df.dropna()
+    # Remove rows with NaN in critical columns only
+    print(f"\n   Removing NaN from critical columns...", end=" ", flush=True)
+    df_clean = df.dropna(subset=cols_to_check)
     removed_nan = initial_rows - len(df_clean)
     print(f"✓ (removed {removed_nan:,} rows)")
     
     # Replace infinite values with NaN then drop
-    print("   Replacing infinite values...", end=" ", flush=True)
+    print("   Removing infinite values...", end=" ", flush=True)
     df_clean = df_clean.replace([np.inf, -np.inf], np.nan)
-    df_clean = df_clean.dropna()
-    removed_inf = len(df_clean) - (initial_rows - removed_nan)
+    df_clean = df_clean.dropna(subset=cols_to_check)
+    removed_inf = len(df) - removed_nan - len(df_clean)
     print(f"✓ (removed {removed_inf:,} rows)")
     
     print("\n   After cleaning:")
     print_dataset_shape(df_clean, "Shape")
     rows_removed = initial_rows - len(df_clean)
-    pct_removed = (rows_removed / initial_rows) * 100
-    print_info(f"Removed: {rows_removed:,} rows ({pct_removed:.2f}%)")
+    if initial_rows > 0:
+        pct_removed = (rows_removed / initial_rows) * 100
+        print_info(f"Removed: {rows_removed:,} rows ({pct_removed:.2f}%)")
     
     print_success("Data cleaning completed")
     return df_clean
@@ -258,12 +281,13 @@ def clean_data(df):
 def filter_east_west_traffic(df, src_col="Src IP", dst_col="Dst IP", prefix=EAST_WEST_PREFIX):
     """
     Filter for East-West traffic (internal network communication).
+    Automatically skips if no IP columns are found.
     Keep only rows where both source and destination IPs start with prefix.
     
     Parameters:
     -----------
     df : pd.DataFrame
-        Dataset with IP columns
+        Dataset with IP columns (optional, auto-detected)
     src_col : str
         Name of source IP column
     dst_col : str
@@ -274,7 +298,7 @@ def filter_east_west_traffic(df, src_col="Src IP", dst_col="Dst IP", prefix=EAST
     Returns:
     --------
     pd.DataFrame
-        Filtered dataset
+        Filtered dataset or original if no IP columns found
     """
     print_step(3, "Filtering for East-West traffic")
     
@@ -282,23 +306,44 @@ def filter_east_west_traffic(df, src_col="Src IP", dst_col="Dst IP", prefix=EAST
     print_info(f"Initial shape: {initial_rows:,} rows")
     print_info(f"Filtering for IPs starting with: {Colors.BOLD}{prefix}{Colors.END}")
     
-    # Check if columns exist
+    # Handle empty dataset
+    if initial_rows == 0:
+        print_warning("Dataset is empty after previous steps!")
+        return df
+    
+    # Auto-detect IP columns if defaults not found
     if src_col not in df.columns or dst_col not in df.columns:
-        print_warning(f"IP columns not found. Available columns: {df.columns.tolist()}")
-        print_warning("Continuing without IP filtering...")
+        possible_src = ['Src IP', 'src_ip', 'Source IP', 'source_ip', 'Source', 'SrcIP', 'src']
+        possible_dst = ['Dst IP', 'dst_ip', 'Destination IP', 'destination_ip', 'Destination', 'DstIP', 'dst']
+        
+        src_col = next((col for col in possible_src if col in df.columns), None)
+        dst_col = next((col for col in possible_dst if col in df.columns), None)
+    
+    # If still not found, skip filtering
+    if src_col is None or dst_col is None:
+        print_warning(f"IP columns not found in dataset")
+        print_warning("Skipping IP-based filtering (dataset appears to be pre-processed/feature-extracted)")
+        print_info(f"Proceeding with all {initial_rows:,} rows")
+        print_dataset_shape(df, "Current shape")
+        print_success("East-West traffic filtering completed (skipped)")
         return df
     
     # Filter for East-West traffic
-    mask = (df[src_col].astype(str).str.startswith(prefix)) & \
-           (df[dst_col].astype(str).str.startswith(prefix))
-    
-    df_filtered = df[mask].copy()
-    rows_removed = initial_rows - len(df_filtered)
-    
-    print(f"\n   • Rows with both IPs starting with {prefix}: {len(df_filtered):,}")
-    print(f"   • Rows removed: {rows_removed:,}")
-    pct_removed = (rows_removed / initial_rows) * 100
-    print_info(f"Filtered out: {pct_removed:.2f}% of rows")
+    try:
+        mask = (df[src_col].astype(str).str.startswith(prefix)) & \
+               (df[dst_col].astype(str).str.startswith(prefix))
+        
+        df_filtered = df[mask].copy()
+        rows_removed = initial_rows - len(df_filtered)
+        
+        print(f"\n   • Rows with both IPs starting with {prefix}: {len(df_filtered):,}")
+        print(f"   • Rows removed: {rows_removed:,}")
+        if initial_rows > 0:
+            pct_removed = (rows_removed / initial_rows) * 100
+            print_info(f"Filtered out: {pct_removed:.2f}% of rows")
+    except Exception as e:
+        print_warning(f"Error during IP filtering: {e}")
+        df_filtered = df.copy()
     
     print_dataset_shape(df_filtered, "After filtering")
     print_success("East-West traffic filtering completed")
@@ -312,6 +357,7 @@ def filter_east_west_traffic(df, src_col="Src IP", dst_col="Dst IP", prefix=EAST
 def filter_labels(df, label_col="Label", target_labels=TARGET_LABELS):
     """
     Keep only rows with target labels.
+    Automatically detects if labels are numeric or string.
     
     Parameters:
     -----------
@@ -332,34 +378,72 @@ def filter_labels(df, label_col="Label", target_labels=TARGET_LABELS):
     initial_rows = len(df)
     print_info(f"Initial shape: {initial_rows:,} rows")
     
+    # Handle empty dataset
+    if initial_rows == 0:
+        print_warning("Dataset is empty after previous steps!")
+        return df
+    
+    # Find label column (case-insensitive)
+    actual_label_col = None
+    for col in df.columns:
+        if col.lower() in ['label', 'attack', 'attack_type', 'class']:
+            actual_label_col = col
+            break
+    
+    if actual_label_col is None:
+        print_warning(f"Label column not found. Available columns: {df.columns.tolist()}")
+        return df
+    
+    print(f"   Using label column: {Colors.BOLD}{actual_label_col}{Colors.END}")
+    
     # Display current labels
     print("\n   Current label distribution:")
-    label_counts = df[label_col].value_counts()
-    for label, count in label_counts.items():
+    label_counts = df[actual_label_col].value_counts()
+    total_displayed = 0
+    for label, count in label_counts.head(10).items():
         pct = (count / len(df)) * 100
         print(f"      • {label}: {count:,} ({pct:.2f}%)")
+        total_displayed += 1
     
-    # Filter for target labels
-    print(f"\n   Target labels: {Colors.BOLD}{target_labels}{Colors.END}")
-    df_filtered = df[df[label_col].isin(target_labels)].copy()
+    if len(label_counts) > 10:
+        print(f"      ... and {len(label_counts) - 10} more")
+    
+    # Check if labels are numeric
+    is_numeric_label = pd.api.types.is_numeric_dtype(df[actual_label_col])
+    
+    if is_numeric_label:
+        # For numeric labels, just keep all valid rows (don't filter)
+        print(f"\n   {Colors.YELLOW}ℹ Labels are numeric - skipping label filtering{Colors.END}")
+        print(f"   Keeping all {initial_rows:,} rows with valid labels")
+        df_filtered = df.copy()
+    else:
+        # For string labels, filter by target labels
+        print(f"\n   Target labels: {Colors.BOLD}{target_labels}{Colors.END}")
+        df_filtered = df[df[actual_label_col].isin(target_labels)].copy()
+    
     rows_removed = initial_rows - len(df_filtered)
     
     print(f"\n   • Rows kept: {len(df_filtered):,}")
     print(f"   • Rows removed: {rows_removed:,}")
-    pct_removed = (rows_removed / initial_rows) * 100
-    print_info(f"Removed: {pct_removed:.2f}% of rows")
+    
+    if initial_rows > 0:
+        pct_removed = (rows_removed / initial_rows) * 100
+        print_info(f"Removed: {pct_removed:.2f}% of rows")
     
     # Display new label distribution
-    print("\n   After filtering:")
-    new_label_counts = df_filtered[label_col].value_counts()
-    for label, count in new_label_counts.items():
-        pct = (count / len(df_filtered)) * 100
-        print(f"      • {label}: {count:,} ({pct:.2f}%)")
+    if len(df_filtered) > 0:
+        print("\n   After filtering:")
+        new_label_counts = df_filtered[actual_label_col].value_counts()
+        for label, count in new_label_counts.head(10).items():
+            pct = (count / len(df_filtered)) * 100
+            print(f"      • {label}: {count:,} ({pct:.2f}%)")
+    else:
+        print_warning("No rows match the target labels!")
     
     print_dataset_shape(df_filtered, "Shape")
     print_success("Label filtering completed")
     
-    return df_filtered
+    return df_filtered, actual_label_col
 
 # ============================================================================
 # STEP 5: ENCODE LABELS
@@ -383,12 +467,25 @@ def encode_labels(df, label_col="Label"):
     """
     print_step(5, "Encoding labels")
     
+    # Auto-detect label column if not in df
+    if label_col not in df.columns:
+        for col in df.columns:
+            if col.lower() in ['label', 'attack', 'attack_type', 'class']:
+                label_col = col
+                break
+    
+    if label_col not in df.columns:
+        print_error(f"Label column '{label_col}' not found!")
+        print_error(f"Available columns: {df.columns.tolist()}")
+        sys.exit(1)
+    
     df_encoded = df.copy()
     
     # Initialize and fit LabelEncoder
     le = LabelEncoder()
     df_encoded[label_col] = le.fit_transform(df[label_col])
     
+    print(f"   Using label column: {Colors.BOLD}{label_col}{Colors.END}")
     print("   Label mapping:")
     for idx, label in enumerate(le.classes_):
         print(f"      • {label}: {idx}")
@@ -420,35 +517,72 @@ def select_numeric_features(df, label_col="Label"):
     """
     print_step(6, "Selecting numeric features")
     
+    # Auto-detect label column if not in df
+    if label_col not in df.columns:
+        for col in df.columns:
+            if col.lower() in ['label', 'attack', 'attack_type', 'class']:
+                label_col = col
+                break
+    
+    if label_col not in df.columns:
+        print_error(f"Label column '{label_col}' not found!")
+        sys.exit(1)
+    
     initial_cols = len(df.columns)
     
     # Get numeric columns
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     
-    # Remove label column from features
+    # Remove label column from features if it's numeric
     if label_col in numeric_cols:
         numeric_cols.remove(label_col)
+    
+    # Remove columns with too many NaN values (>50% missing)
+    nan_percentage = (df[numeric_cols].isna().sum() / len(df)) * 100
+    cols_to_remove = nan_percentage[nan_percentage > 50].index.tolist()
+    if len(cols_to_remove) > 0:
+        print_warning(f"Removing {len(cols_to_remove)} columns with >50% NaN values:")
+        for col in cols_to_remove[:10]:
+            print(f"      • {col}: {nan_percentage[col]:.1f}% NaN")
+        if len(cols_to_remove) > 10:
+            print(f"      ... and {len(cols_to_remove)-10} more")
+        numeric_cols = [c for c in numeric_cols if c not in cols_to_remove]
     
     X = df[numeric_cols].copy()
     y = df[label_col].copy()
     
     print(f"   • Total columns: {initial_cols:,}")
     print(f"   • Numeric features: {len(numeric_cols):,}")
-    print(f"   • Label column: {label_col}")
+    print(f"   • Label column: {Colors.BOLD}{label_col}{Colors.END}")
+    print(f"   • Features with <50% NaN: {len(numeric_cols)}")
     
     print(f"\n   Features selected:")
-    print(f"      {numeric_cols[:5]}...")  # Show first 5
-    print(f"      (... and {len(numeric_cols)-5} more)")
+    if len(numeric_cols) > 0:
+        print(f"      {numeric_cols[:5]}")
+        if len(numeric_cols) > 5:
+            print(f"      (... and {len(numeric_cols)-5} more)")
+    else:
+        print_warning("No numeric columns found!")
     
     print(f"\n   • X shape: {X.shape}")
     print(f"   • y shape: {y.shape}")
     
-    # Check for missing values
+    # Check for missing values in remaining columns
     X_nan = X.isna().sum().sum()
     if X_nan > 0:
         print_warning(f"Found {X_nan:,} NaN values in features - removing rows")
+        rows_before = len(X)
         X = X.dropna()
         y = y[X.index]
+        rows_after = len(X)
+        print_info(f"Removed {rows_before - rows_after:,} rows ({(rows_before-rows_after)/rows_before*100:.1f}%)")
+        print_info(f"Remaining rows: {rows_after:,}")
+    
+    if len(X) == 0:
+        print_error("No valid samples after NaN removal! Dataset may be too sparse.")
+        print_error(f"All {len(numeric_cols)} numeric features were NaN.")
+        print_warning("TIP: Check if data files have compatible column names/formats")
+        sys.exit(1)
     
     print_success("Numeric feature selection completed")
     
@@ -644,7 +778,7 @@ def evaluate_model(model, X_test, y_test, label_encoder=None):
     
     # Make predictions
     print("   Making predictions...", end=" ", flush=True)
-    y_pred = model.predict(y_test)
+    y_pred = model.predict(X_test)
     y_pred_proba = model.predict_proba(X_test)
     print("✓")
     
@@ -663,7 +797,7 @@ def evaluate_model(model, X_test, y_test, label_encoder=None):
     
     # Get class names if label encoder available
     if label_encoder is not None:
-        target_names = label_encoder.classes_.tolist()
+        target_names = [str(c) for c in label_encoder.classes_]
     else:
         target_names = None
     
@@ -717,24 +851,41 @@ def main():
     try:
         # STEP 1: Load Data
         df = load_data()
+        if len(df) == 0:
+            print_error("No data loaded! Check data directory.")
+            sys.exit(1)
         
         # STEP 2: Clean Data
         df = clean_data(df)
+        if len(df) == 0:
+            print_error("All data removed during cleaning! Dataset may be incompatible.")
+            sys.exit(1)
         
         # STEP 3: Filter East-West Traffic
         df = filter_east_west_traffic(df)
+        if len(df) == 0:
+            print_warning("No East-West traffic found. Proceeding with all data...")
         
-        # STEP 4: Filter Labels
-        df = filter_labels(df)
+        #STEP 4: Filter Labels
+        df, label_col_used = filter_labels(df)
+        if len(df) == 0:
+            print_error("No rows match target labels! Check data labels.")
+            sys.exit(1)
         
-        # STEP 5: Encode Labels
-        df, label_encoder = encode_labels(df)
+        # STEP 5: Encode Labels (pass the detected label column)
+        df, label_encoder = encode_labels(df, label_col=label_col_used)
         
-        # STEP 6: Select Numeric Features
-        X, y = select_numeric_features(df)
+        # STEP 6: Select Numeric Features (pass the detected label column)
+        X, y = select_numeric_features(df, label_col=label_col_used)
+        if len(X) == 0:
+            print_error("No numeric features found!")
+            sys.exit(1)
         
         # STEP 8: Split Dataset (before normalization)
         X_train, X_test, y_train, y_test = split_dataset(X, y)
+        if len(X_train) == 0 or len(X_test) == 0:
+            print_error("Split resulted in empty train or test set!")
+            sys.exit(1)
         
         # STEP 7: Normalize Features (after split)
         X_train_scaled, X_test_scaled, scaler = normalize_features(X_train, X_test)
